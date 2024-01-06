@@ -420,17 +420,19 @@ class InstanceNormAlternative(nn.InstanceNorm2d):
 
     def forward(self, inp: torch.Tensor) -> torch.Tensor:
         self._check_input_dim(inp)
-
-        desc = 1 / (input.var(axis=[2, 3], keepdim=True, unbiased=False) + self.eps) ** 0.5
-        retval = (input - input.mean(axis=[2, 3], keepdim=True)) * desc
+        #print(f"input: {inp}")
+        desc = 1 / (inp.var(axis=[2, 3], keepdim=True, unbiased=False) + self.eps) ** 0.5
+        retval = (inp - inp.mean(axis=[2, 3], keepdim=True)) * desc
         return retval
     
 class SPADE(nn.Module):
     def __init__(self, norm_nc, label_nc):
         super().__init__()
 
-        self.param_free_norm = nn.InstanceNorm2d(norm_nc, track_running_stats=False, affine=False)
-        #self.param_free_norm = nn.InstanceNorm2d(norm_nc, affine=False)
+        #self.param_free_norm = nn.InstanceNorm2d(norm_nc, track_running_stats=False, affine=False)
+        self.param_free_norm = InstanceNormAlternative(norm_nc, affine=False)
+        #self.param_free_norm = InstanceNormAlternative(norm_nc, affine=False)
+        
         nhidden = 128
 
         self.mlp_shared = nn.Sequential(

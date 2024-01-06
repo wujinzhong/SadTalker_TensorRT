@@ -35,9 +35,9 @@ from gfpgan import GFPGANer
 def torch_onnx_export_animate_from_coeff_generator(onnx_model, fp16=False, onnx_model_path="model.onnx", maxBatch=1 ):
     if not os.path.exists(onnx_model_path):
         dynamic_axes = {
-            "latent_model_input":   {0: "bs_x_2"},
-            "prompt_embeds":        {0: "bs_x_2"},
-            "noise_pred":           {0: "batch_size"}
+            "source_image":             {0: "batch_size"},
+            "kp_driving_value":         {0: "batch_size"},
+            "kp_source_value":          {0: "batch_size"}
         }
 
         device = torch.device("cuda:0")
@@ -87,7 +87,7 @@ def torch_onnx_export_animate_from_coeff_generator(onnx_model, fp16=False, onnx_
                         onnx_model_path, #f,
                         export_params=True,
                         verbose=True,
-                        opset_version=19,
+                        opset_version=16,
                         do_constant_folding=False,
                         input_names=list(dummy_inputs.keys()),
                         output_names=output_names,
@@ -110,6 +110,20 @@ def torch_onnx_export_animate_from_coeff_generator(onnx_model, fp16=False, onnx_
     check_onnx(onnx_model_path)
     onnx_model.to('cpu')
     return
+
+def modify_onnx_animate_from_coeff_generator(onnx_model_path_modified, onnx_model_path):
+    import onnx
+    import onnx_graphsurgeon as gs
+
+    model = onnx.load(onnx_model_path)
+    graph = gs.import_onnx(model)
+    for node in graph.nodes:
+        if "GridSample" in node.name:
+            print(f"node funnd: {node}")
+            node.attrs = {"name": "GridSample3D", "version": 1, "namespace": ""}
+            node.op = "GridSample3D"
+
+    onnx.save(gs.export_onnx(graph), onnx_model_path_modified)
 
 def torch_onnx_export_fan(onnx_model, fp16=False, onnx_model_path="model.onnx", maxBatch=1 ):
     if not os.path.exists(onnx_model_path):
@@ -579,28 +593,41 @@ def main(args):
         
         with NVTXUtil("AnimateFromCoeff", "blue", mm), SynchronizeUtil(torchutil.torch_stream):
             animate_from_coeff = AnimateFromCoeff(sadtalker_paths, device)
+            pth_model_path = "./onnx_trt/animate_from_coeff_generator_bs1_fp32_6000.pth"
+            if not os.path.exists(pth_model_path): 
+                torch.save(animate_from_coeff.generator.state_dict(), pth_model_path)
 
             # as GridSample 5D is not support in current latest torch.onnx.export, and it will be added in onnx version 1.16.
             # so just leave it there.
-            #with NVTXUtil("onnx", "blue", mm), SynchronizeUtil(torchutil.torch_stream):
-            #    onnx_model_path = "./onnx_trt/animate_from_coeff_generator_bs1_fp32_6000.onnx"
-            #    torch_onnx_export_animate_from_coeff_generator(animate_from_coeff.generator, 
-            #                                                   fp16=False, 
-            #                                                   onnx_model_path=onnx_model_path, 
-            #                                                   maxBatch=1 )
-            #with NVTXUtil("trt", "blue", mm), SynchronizeUtil(torchutil.torch_stream):
-            #    animate_from_coeff_generator_trt_engine = None
-            #    trt_engine_path = "./onnx_trt/animate_from_coeff_generator_bs1_fp32_6000.engine"
-            #
-            #    build_TensorRT_engine_CLI( src_onnx_path=onnx_model_path, 
-            #                              dst_trt_engine_path=trt_engine_path )
-            #
-            #    if animate_from_coeff_generator_trt_engine is None: 
-            #        animate_from_coeff_generator_trt_engine = TRT_Engine(trt_engine_path, gpu_id=0, torch_stream=torchutil.torch_stream)
-            #        assert animate_from_coeff_generator_trt_engine
-            #    animate_from_coeff.generator_trt_engine = animate_from_coeff_generator_trt_engine if USE_TRT else None
-
-
+            with NVTXUtil("onnx", "blue", mm), SynchronizeUtil(torchutil.torch_stream):
+                onnx_model_path = "./onnx_trt/animate_from_coeff_generator_bs1_fp32_6000.onnx"
+                if not os.path.exists(onnx_model_path): 
+                    torch_onnx_export_animate_from_coeff_generator(animate_from_coeff.generator, 
+                                                               fp16=False, 
+                                                               onnx_model_path=onnx_model_path, 
+                                                               maxBatch=1 )
+                onnx_model_path_modified = "./onnx_trt/animate_from_coeff_generator_bs1_fp32_6000_modified.onnx"
+                if not os.path.exists(onnx_model_path_modified):
+                    modify_onnx_animate_from_coeff_generator(onnx_model_path_modified, onnx_model_path)
+                onnx_model_path = onnx_model_path_modified
+            
+            with NVTXUtil("trt", "blue", mm), SynchronizeUtil(torchutil.torch_stream):
+                animate_from_coeff_generator_trt_engine = None
+                trt_engine_path = "./onnx_trt/animate_from_coeff_generator_bs1_fp32_6000.engine"
+                trt_plugins_so_paths = ["./grid-sample3d-trt-plugin/build/libgrid_sample_3d_plugin.so"]
+                if not os.path.exists(trt_engine_path): 
+                    input_shape = None #"--minShapes='source_image':2x3x256x256,'kp_source_value':2x15x3,'kp_norm_value':2x15x3 --optShapes='source_image':2x3x256x256,'kp_source_value':2x15x3,'kp_norm_value':2x15x3 --maxShapes='source_image':2x3x256x256,'kp_source_value':2x15x3,'kp_norm_value':2x15x3"
+                    build_TensorRT_engine_CLI( src_onnx_path=onnx_model_path, 
+                                          dst_trt_engine_path=trt_engine_path,
+                                           trt_plugins_so_paths=trt_plugins_so_paths,
+                                         input_shape=input_shape )
+            
+                if animate_from_coeff_generator_trt_engine is None: 
+                    animate_from_coeff_generator_trt_engine = TRT_Engine(trt_engine_path, gpu_id=0, torch_stream=torchutil.torch_stream, trt_plugins_so_paths=trt_plugins_so_paths)
+                    assert animate_from_coeff_generator_trt_engine
+                animate_from_coeff.generator_trt_engine = animate_from_coeff_generator_trt_engine if USE_TRT else None
+            #animate_from_coeff.generator_trt_engine = None
+            
             method = 'gfpgan' # dont remove this line, as I move GFPGANer creator from face_enhancer.py to here and use method 'gfpgan' by default
             bg_upsampler = None
             # ------------------------ set up GFPGAN restorer ------------------------
@@ -870,6 +897,6 @@ if __name__ == '__main__':
         args.device = "cuda"
     else:
         args.device = "cpu"
-
+    print(f"using {args.device}")
     main(args)
 

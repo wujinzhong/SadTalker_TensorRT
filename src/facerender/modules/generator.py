@@ -3,7 +3,7 @@ from torch import nn
 import torch.nn.functional as F
 from src.facerender.modules.util import ResBlock2d, SameBlock2d, UpBlock2d, DownBlock2d, ResBlock3d, SPADEResnetBlock
 from src.facerender.modules.dense_motion import DenseMotionNetwork
-
+import os
 
 class OcclusionAwareGenerator(nn.Module):
     """
@@ -211,6 +211,11 @@ class OcclusionAwareSPADEGenerator(nn.Module):
         return F.grid_sample(inp, deformation)
 
     def forward(self, source_image, kp_driving_value, kp_source_value):
+        #if not os.path.exists('./onnx_trt/animate_from_coeff_generator_bs1_fp32_6000_source_image.pt'):
+        #    torch.save(source_image, './onnx_trt/animate_from_coeff_generator_bs1_fp32_6000_source_image.pt')
+        #    torch.save(kp_driving_value, './onnx_trt/animate_from_coeff_generator_bs1_fp32_6000_kp_driving.pt')
+        #    torch.save(kp_source_value, './onnx_trt/animate_from_coeff_generator_bs1_fp32_6000_kp_source.pt')
+
         # Encoding (downsampling) part
         out = self.first(source_image)
         for i in range(len(self.down_blocks)):

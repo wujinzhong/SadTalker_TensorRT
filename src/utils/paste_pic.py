@@ -66,34 +66,35 @@ def paste_pic(video_path, pic_path, crop_info, new_audio_path, full_video_path, 
     tmp_path = str(uuid.uuid4())+'.mp4'
     gen_imgs = [None for _ in range(len(crop_frames))]
 
-    import threading
-    def thread_func( crop_frame, i, seamless_clone_ ):
-        p = cv2.resize(crop_frame.astype(np.uint8), (ox2-ox1, oy2 - oy1))
-        mask = 255*np.ones((p.shape[0], p.shape[1], 1), dtype=np.uint8)
-        location = ((ox1+ox2) // 2, (oy1+oy2) // 2)
+    if True:
+        import threading
+        def thread_func( crop_frame, i, seamless_clone_ ):
+            p = cv2.resize(crop_frame.astype(np.uint8), (ox2-ox1, oy2 - oy1))
+            mask = 255*np.ones((p.shape[0], p.shape[1], 1), dtype=np.uint8)
+            location = ((ox1+ox2) // 2, (oy1+oy2) // 2)
+            
+            if seamless_clone_ is not None:
+                with NVTXUtil("seamlessClone_CUDA", "blue", mm):#, SynchronizeUtil(torchutil.torch_stream):
+                    gpu_id = torch.cuda.current_device()
+                    full_img_dup = copy.deepcopy(full_img)
+                    seamless_clone_.loadMatsInSeamlessClone( p, full_img_dup, mask, location[0], location[1], gpu_id );
+                    gen_img = seamless_clone_.seamlessClone();
+                    #blend_file = "./output/gen_img.jpg";
+                    #cv2.imwrite(blend_file, gen_img);
+            else:
+                with NVTXUtil("seamlessClone_OpenCV", "blue", mm):#, SynchronizeUtil(torchutil.torch_stream):
+                    gen_img = cv2.seamlessClone(p, full_img, mask, location, cv2.NORMAL_CLONE)
+            gen_imgs[i] = gen_img #out_tmp.write(gen_img)
         
-        if seamless_clone_ is not None:
-            with NVTXUtil("seamlessClone_CUDA", "blue", mm):#, SynchronizeUtil(torchutil.torch_stream):
-                gpu_id = torch.cuda.current_device()
-                full_img_dup = copy.deepcopy(full_img)
-                seamless_clone_.loadMatsInSeamlessClone( p, full_img_dup, mask, location[0], location[1], gpu_id );
-                gen_img = seamless_clone_.seamlessClone();
-                #blend_file = "./output/gen_img.jpg";
-                #cv2.imwrite(blend_file, gen_img);
-        else:
-            with NVTXUtil("seamlessClone_OpenCV", "blue", mm):#, SynchronizeUtil(torchutil.torch_stream):
-                gen_img = cv2.seamlessClone(p, full_img, mask, location, cv2.NORMAL_CLONE)
-        gen_imgs[i] = gen_img #out_tmp.write(gen_img)
-    
-    threads = []
-    with NVTXUtil(f"loading", "red"):
-        i = 0
-        for crop_frame in tqdm(crop_frames, 'seamlessClone:'):
-            seamless_clone_ = seamless_clone_instances[i%(len(seamless_clone_instances))] if seamless_clone_instances else None
-            t = threading.Thread( target=thread_func, args=(crop_frame, i, seamless_clone_) )
-            threads.append(t)
-            t.start()
-            i += 1
+        threads = []
+        with NVTXUtil(f"loading", "red"):
+            i = 0
+            for crop_frame in tqdm(crop_frames, 'seamlessClone:'):
+                seamless_clone_ = seamless_clone_instances[i%(len(seamless_clone_instances))] if seamless_clone_instances else None
+                t = threading.Thread( target=thread_func, args=(crop_frame, i, seamless_clone_) )
+                threads.append(t)
+                t.start()
+                i += 1
 
     for seamless_clone_instance in seamless_clone_instances:
         seamless_clone_instance.sync()

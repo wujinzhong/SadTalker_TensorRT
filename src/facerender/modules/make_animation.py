@@ -4,6 +4,8 @@ import torch.nn.functional as F
 import numpy as np
 from tqdm import tqdm 
 import nvtx
+import random
+
 from InferenceUtil import (
     cuda_call,
 )
@@ -137,6 +139,7 @@ def make_animation(source_image, source_semantics, target_semantics,
             kp_norm = kp_driving
 
             cuda_call(cudart.cudaStreamSynchronize(torch.cuda.current_stream().cuda_stream))
+            rand_num = random.randint(0,10000)
             if generator_trt_engine:
                 rng = nvtx.start_range( message="generator_trt", color='red' )
                 trt_output = generator_trt_engine.inference(inputs=[source_image.contiguous(), 
@@ -147,6 +150,10 @@ def make_animation(source_image, source_semantics, target_semantics,
                 out_mask = out[0]
                 out_occlusion_map = out[1]
                 out_prediction = out[2]
+                
+                #print(f"out[2]: {out[2].shape}")
+                #np_array0 = out_prediction.cpu().numpy()[0,0]
+                #np.savetxt(f'./results/txt/{rand_num}_trt.txt', np_array0)
             else:
                 rng = nvtx.start_range( message="generator_torch", color='red' )
                 out_mask,\
@@ -154,8 +161,12 @@ def make_animation(source_image, source_semantics, target_semantics,
                 out_prediction = generator(source_image, 
                                 kp_source_value=kp_source['value'], 
                                 kp_driving_value=kp_norm['value'])
+                #print(f"out_prediction: {out_prediction.shape}")
+                #np_array1 = out_prediction.cpu().numpy()[0,0]
+                #np.savetxt(f'./results/txt/{rand_num}_torch.txt', np_array1)
+                #np_array1_0 = np_array1 - np_array0
+                #np.savetxt(f'./results/txt/{rand_num}_torch-txt.txt', np_array1_0)
                 
-
             '''
             source_image: (torch.Size([2, 3, 256, 256]), device(type='cuda', index=0), torch.float32)
             kp_source[value]: (torch.Size([2, 15, 3]), device(type='cuda', index=0), torch.float32)

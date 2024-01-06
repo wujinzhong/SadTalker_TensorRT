@@ -712,12 +712,19 @@ class ONNX_Wraper():
         if MY_VERBOSE: print(f"ort_sess_outputs: {ort_sess_outputs[0,0,0,0]}")
         return ort_sess_outputs
     
-def build_TensorRT_engine_CLI( src_onnx_path:str="./model.onnx", dst_trt_engine_path:str="./model.engine" ):
+def build_TensorRT_engine_CLI( src_onnx_path:str="./model.onnx", dst_trt_engine_path:str="./model.engine", 
+                              trt_plugins_so_paths=None, input_shape=None ):
     assert dst_trt_engine_path
     assert dst_trt_engine_path.endswith(".engine"), "to be built TRT model file should end with .engine"
     if not os.path.exists(dst_trt_engine_path) and src_onnx_path:
         print(f"building TensorRT engine: {dst_trt_engine_path}")
         command = f"trtexec --onnx={src_onnx_path} --saveEngine={dst_trt_engine_path} --workspace=4096  --exportOutput=output.json"
+        if trt_plugins_so_paths is not None:
+            for plugin_so_path in trt_plugins_so_paths:
+                command = command + f" --plugins={plugin_so_path}"
+        if input_shape is not None:
+            command = command + " " + input_shape
+        print(f"command: {command}")
         subprocess.call(command, shell=True)
 '''
 usage:
@@ -743,7 +750,7 @@ if trt_engine is None:
 '''
 
 class TRT_Engine():
-    def __init__(self, trt_engine_path:str, gpu_id, torch_stream=None, onnx_inputs_name:str=None, onnx_outputs_name:str=None):
+    def __init__(self, trt_engine_path:str, gpu_id, torch_stream=None, onnx_inputs_name:str=None, onnx_outputs_name:str=None, trt_plugins_so_paths: list=None):
         if not os.path.exists(trt_engine_path):
             assert False
         self.trt_engine_path = trt_engine_path
@@ -753,8 +760,19 @@ class TRT_Engine():
         self.onnx_outputs_name = onnx_outputs_name
         
         trt.init_libnvinfer_plugins(trt.Logger(trt.Logger.ERROR), '')
+
+        if trt_plugins_so_paths is not None:
+            self.load_trt_plugins(trt_plugins_so_paths)
+
         self._init_execution_context( self.trt_engine_path )
         
+    def load_trt_plugins(self, trt_plugins_so_paths):
+        for plugin_path in trt_plugins_so_paths:
+            #handle=ctypes.CDLL("../plugin/build/libgrid_sample_3d_plugin.so", mode = ctypes.RTLD_GLOBAL)
+            handle=ctypes.CDLL(plugin_path, mode = ctypes.RTLD_GLOBAL)
+            if not handle:
+                print(f"load {plugin_path} plugin error")
+
     def _init_execution_context( self, trt_engine_path ):
         if True: # deserialize TRT engines
             if os.path.exists(trt_engine_path):
