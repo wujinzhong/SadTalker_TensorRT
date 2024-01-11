@@ -15,7 +15,7 @@ Here I install facexlib and GFPGAN from source code, as we will modify its sourc
 
 The results is at ./results folder.
 
-###Install CV-CUDA
+### Install CV-CUDA
 CV-CUDA is a good performance optimizing tool for pre/post-processing of CV pipelines.
 
 Download CV-CUDA's files from here, .
@@ -30,10 +30,10 @@ Download CV-CUDA's files from here, .
 > export LD_LIBRARY_PATH=/cv-cuda/opt/nvidia/cvcuda0/lib/x86_64-linux-gnu/:$LD_LIBRARY_PATH
 > export PYTHONPATH=/cv-cuda/opt/nvidia/cvcuda0/lib/x86_64-linux-gnu/python/:$PYTHONPATH
 
-###download TensorRT engines for v8.6.0
+### download TensorRT engines for v8.6.0
 goto my google drive at here, https://drive.google.com/drive/folders/1TWh6VLRer9wzh5VO4tH0ebzAydkq7IRL?usp=sharing. Download all the files and put in the right folders.
 
-###SeamlessClone CUDA optimized Ubuntu .so lib for python wrapping usage
+### SeamlessClone CUDA optimized Ubuntu .so lib for python wrapping usage
 Goto my repo at here, https://github.com/wujinzhong/seamlessCloneOptimization. Follow the instructions to build seamlessclone_cuda.so and SeamlessClone.so. cp them to ./SadTalker foler root folder.
 
 ## Optimization scheme
@@ -66,7 +66,7 @@ Here are some of our optimizing schemes, we will update the doc later.
 >Re-implementing cv2.seamlessClone with CUDA
 >
 
-###something about TRT optimizing of animate_from_coeff.generator AI model
+### Something about TRT optimizing of animate_from_coeff.generator AI model
 
 We tried adding a gridsample TRT plugin for animate_from_coeff.generator, to make it can be saved via torch.onnx.export to ONNX and built TRT engine successfully. But after that, we found the accuracy decrease a bit, resulting in the generated video having almost no movement at lip area. I digged into it, and found that there are some differences in the output tensor between this TRT converted engine to the torch implemented counterpart. So I just uploaded it to GitHub and commented it, just in case you just want to test the TRT conversion performance. 
 
