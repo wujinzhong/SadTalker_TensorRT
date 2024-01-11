@@ -626,7 +626,7 @@ def main(args):
                     animate_from_coeff_generator_trt_engine = TRT_Engine(trt_engine_path, gpu_id=0, torch_stream=torchutil.torch_stream, trt_plugins_so_paths=trt_plugins_so_paths)
                     assert animate_from_coeff_generator_trt_engine
                 animate_from_coeff.generator_trt_engine = animate_from_coeff_generator_trt_engine if USE_TRT else None
-            #animate_from_coeff.generator_trt_engine = None
+            animate_from_coeff.generator_trt_engine = None
             
             method = 'gfpgan' # dont remove this line, as I move GFPGANer creator from face_enhancer.py to here and use method 'gfpgan' by default
             bg_upsampler = None

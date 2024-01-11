@@ -66,5 +66,11 @@ Here are some of our optimizing schemes, we will update the doc later.
 >Re-implementing cv2.seamlessClone with CUDA
 >
 
+###something about TRT optimizing of animate_from_coeff.generator AI model
 
+We tried adding a gridsample TRT plugin for animate_from_coeff.generator, to make it can be saved via torch.onnx.export to ONNX and built TRT engine successfully. But after that, we found the accuracy decrease a bit, resulting in the generated video having almost no movement at lip area. I digged into it, and found that there are some differences in the output tensor between this TRT converted engine to the torch implemented counterpart. So I just uploaded it to GitHub and commented it, just in case you just want to test the TRT conversion performance. 
+
+You can open it by find "animate_from_coeff.generator_trt_engine = None" line in inference.py and comment it.
+
+Even without this, our optimization still gains about 4.5X (RTX6000) performance speed up. Hope this can help you too.
 
